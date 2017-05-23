@@ -19,6 +19,12 @@ class MySocket:
     dport = ""
     sport = ""
     ip_header = ""
+    con = threading.Condition()
+
+    # 以完成三次握手的连接
+    already = []
+    # 待处理的连接
+    wait = []
 
     def __init__(self, src):
         self.src = src
@@ -54,18 +60,23 @@ class MySocket:
 
     def listen(self):
         # 开始抓包
-        self.src = "23.83.232.198"
         self.state_change("LISTEN")
         self.start_daemon()
 
     # 三次握手完成后
     def accept(self):
-        while True:
-            if self.dst == "":
-                time.sleep(3)
-            else:
-                break
-        pass
+        if self.con.acquire():
+            while True:
+                if self.already:
+                    del self.already[0]
+                    return self.create_new_socket()
+                else:
+                    self.con.wait()
+
+    def create_new_socket(self):
+        s = MySocket(self.src)
+        print "accept"
+        return s
 
     def close(self):
         # self.dst = ""
@@ -109,21 +120,31 @@ class MySocket:
         sniff(filter=filter_rule, store=0, prn=self.dispatch)
 
     def dispatch(self, packet):
+        # 不是 TCP 的包
         if not isinstance(packet.payload.payload, TCP):
             return
+
         ip, port = packet.payload.dst, packet.dport
-        if ip != self.src:
+
+        # 不是发给我的包
+        if ip != self.src and port != self.sport:
             return
+
         packet[TCP].show()
-        if (ip, port) not in self.open_sockets:
-            print "%s:%s" % (ip, port)
-            # 这里的 src 和 sport 我没有按照他的写，后面再看看，暂时先不管
-            if self.state != "LISTEN":
-                reset = IP(src=self.src, dst=packet.payload.src) / TCP(seq=packet.ack, sport=self.sport,
-                                                                       dport=packet.sport,
-                                                                       flags="R")
-                self.send_packet(reset)
-                print "send R %s" % ip
+
+        # 如果是服务器：
+
+
+        # if (ip, port) not in self.open_sockets:
+        #     print "%s:%s" % (ip, port)
+        #     # 这里的 src 和 sport 我没有按照他的写，后面再看看，暂时先不管
+        #     if self.state != "LISTEN":
+        #         reset = IP(src=self.src, dst=packet.payload.src) / TCP(seq=packet.ack, sport=self.sport,
+        #                                                                dport=packet.sport,
+        #                                                                flags="R")
+        #         self.send_packet(reset)
+        #         print "send R %s" % ip
+
         self.handle_packet(packet)
 
     def send_packet(self, packet, verbose=0):
@@ -173,8 +194,13 @@ class MySocket:
             if self.state == "SYN_RCVD":
                 self.state_change("ESTABLISHED")
                 print "ESTABLISHED"
-            # 唤醒 accept
-            # 返回一个新的 socket
+                # 唤醒 accept
+                # 返回一个新的 socket
+                if self.con.acquire():
+                    self.already.append(1)
+                    self.con.notify()
+                    # 因为 notify 不会释放锁，所以需要手动释放
+                    self.con.release()
             elif self.state == "FIN_WAIT_1":
                 self.state_change("FIN_WAIT_2")
 
