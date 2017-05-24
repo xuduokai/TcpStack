@@ -26,15 +26,16 @@ server = MySocket(ip)
 server.bind(sport=port)
 # 这个先暂时自己指定 IP，影响不大
 server.bindIP(ip)
-
+server.seq = 100
 server.listen()
 time.sleep(30)
 # socket = server.accept()
 # time.sleep(8)
 
-# data = server.recv(50)
-# print data
+data = server.recv(50)
+print data
 # print socket.recv_buffer
-# socket.send("Server say : hi")
+# server.send("s")
+# time.sleep(2)
 # server.close()
 # print server.states

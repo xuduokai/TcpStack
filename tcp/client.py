@@ -35,18 +35,19 @@ client = MySocket(src=src)
 client.connect(dst=ip, dport=port)
 
 # 要暂停8秒，因为连接有点慢
-time.sleep(8)
-data = "client say : Hello"
+time.sleep(5)
+data = "c"
 # data = "GET / HTTP/1.0\r\nHost: %s\r\n\r\n" % ip
 
-# client.send(data)
+client.send(data)
+client.send(data)
 # 看看能不能收到 ACK
-# time.sleep(10)
+time.sleep(5)
 
-# data = client.recv()
-# print data
+data = client.recv(50)
+print data
 # time.sleep(10)
 
 # client.close()
 # time.sleep(10)
-print client.states
+# print client.states

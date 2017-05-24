@@ -265,6 +265,7 @@ class MySocket:
             full_packet = full_packet / load
         self.send_packet(full_packet)
 
+        # todo：现在是发了 seq 就增加，那么万一对面只收到一部分怎么办，应该是收到 ack 后把 seq 增加吧，后面再看
         if load is not None:
             self.seq += len(load)
 
