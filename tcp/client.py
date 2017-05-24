@@ -36,10 +36,13 @@ client.connect(dst=ip, dport=port)
 
 # 要暂停8秒，因为连接有点慢
 time.sleep(8)
-# data = "client say : Hello"
-data = "GET / HTTP/1.0\r\nHost: %s\r\n\r\n" % ip
+data = "client say : Hello"
+# data = "GET / HTTP/1.0\r\nHost: %s\r\n\r\n" % ip
 
 # client.send(data)
+# 看看能不能收到 ACK
+# time.sleep(10)
+
 # data = client.recv()
 # print data
 # time.sleep(10)

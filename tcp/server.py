@@ -28,13 +28,13 @@ server.bind(sport=port)
 server.bindIP(ip)
 
 server.listen()
-# time.sleep(30)
-socket = server.accept()
-print "success"
-print server.states
-# dat = socket.recv()
-# print dat
+time.sleep(30)
+# socket = server.accept()
+# time.sleep(8)
+
+# data = server.recv(50)
+# print data
+# print socket.recv_buffer
 # socket.send("Server say : hi")
 # server.close()
-# time.sleep(5)
 # print server.states

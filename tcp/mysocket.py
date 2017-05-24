@@ -31,6 +31,11 @@ class MySocket:
         self.states = []
         self.state = ""
         self.state_change("CLOSED")
+        self.recv_buffer = ""
+        self.new_so = False
+
+        # 目的：确认是不是给我的包，只给服务器用，后面确认是不是给自己的包，不是发生 rst 的后来再说吧
+
         self.open_sockets = {}
         self.seq = self._generate_seq()
         # ack是我们下一个想要接收的报文
@@ -44,8 +49,8 @@ class MySocket:
         # self.src = self.__get_loacl_ip()
         self.sport = self.__get_random_port()
 
-        self.open_sockets[dst, dport] = self
-        self.open_sockets[self.src, self.sport] = self
+        # self.open_sockets[dst, dport] = self
+        # self.open_sockets[self.src, self.sport] = self
 
         self.ip_header = IP(dst=self.dst, src=self.src)
         # 开始三次握手，发送建立连接的请求
@@ -75,7 +80,14 @@ class MySocket:
 
     def create_new_socket(self):
         s = MySocket(self.src)
-        print "accept"
+        s.sport = self.sport
+        s.dst = self.dst
+        s.dport = self.dport
+        s.state_change("ESTABLISHED")
+        s.new_so = True
+        self.open_sockets[s.dst, s.dport] = s
+        self.reset_state()
+        s.start_daemon(is_new_socket=True)
         return s
 
     def close(self):
@@ -96,8 +108,18 @@ class MySocket:
         # Do the actual send
         self.send_default(load=data, flags="P")
 
-    def recv(self):
-        return ""
+    def recv(self, size, timeout=None):
+        start_time = time.time()
+        # Block until the connection is closed
+        while len(self.recv_buffer) < size:
+            time.sleep(0.001)
+            if self.state in ["CLOSED", "LAST-ACK"]:
+                break
+            if timeout < (time.time() - start_time):
+                break
+        recv = self.recv_buffer[:size]
+        self.recv_buffer = self.recv_buffer[size:]
+        return recv
 
     def __get_loacl_ip(self):
         return "10.211.55.253"
@@ -106,8 +128,13 @@ class MySocket:
         return random.randint(12345, 50000)
         # return 12345
 
-    def start_daemon(self):
-        t = threading.Thread(target=self.getPacket)
+    def start_daemon(self, is_new_socket=False):
+
+        if is_new_socket:
+            t = threading.Thread(target=self.get_new_packet)
+        else:
+            t = threading.Thread(target=self.getPacket)
+
         t.daemon = True
         t.start()
 
@@ -115,8 +142,13 @@ class MySocket:
         # 抓包肯定只抓目的IP地址 是我们当前 sockets 的 ip
         # filter_rule = "tcp and ip dst %s and port %s" % (self.src, self.sport)
         # 先只过滤 ip
-        filter_rule = "tcp and ip dst %s " % self.src
 
+        filter_rule = "tcp and ip dst %s " % self.src
+        sniff(filter=filter_rule, store=0, prn=self.dispatch)
+
+    def get_new_packet(self):
+
+        filter_rule = "tcp and ip src %s " % self.dst
         sniff(filter=filter_rule, store=0, prn=self.dispatch)
 
     def dispatch(self, packet):
@@ -129,6 +161,11 @@ class MySocket:
         # 不是发给我的包
         if ip != self.src and port != self.sport:
             return
+
+        # 已经建立连接，服务器不处理
+        # src, sport = packet.payload.src, packet.sport
+        # if (src, sport) in self.open_sockets:
+        #     return
 
         packet[TCP].show()
 
@@ -157,7 +194,10 @@ class MySocket:
         self.ack = max(self.ack, self.next_seq(packet))
         recv_flags = packet.sprintf("%TCP.flags%")
 
-        if "R" in recv_flags:
+        if "P" in recv_flags:
+            self.recv_buffer += packet.payload.load
+            self.send_default("A")
+        elif "R" in recv_flags:
             pass
         # self.close()
         elif "S" in recv_flags:
@@ -206,6 +246,15 @@ class MySocket:
 
             elif self.state == "LAST_ACK":
                 self.state_change("CLOSE")
+
+    def reset_state(self):
+        """这里我是用条件变量的方式去创建一个新的 socket，会不会有性能问题？
+            以后看一下书上是怎么实现的
+            """
+        self.state_change("LISTEN")
+        self.dst = ""
+        self.dport = -1
+        self.seq += 64000
 
     def send_default(self, flags, load=None):
         packet = TCP(sport=self.sport, dport=self.dport, flags=flags, seq=self.seq, ack=self.ack)
