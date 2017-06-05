@@ -32,20 +32,27 @@ ip = "10.211.55.250"
 port = 6666
 
 client = MySocket(src=src)
+# 发送 S
 client.connect(dst=ip, dport=port)
 
-# 要暂停8秒，因为连接有点慢
+# 要暂停，接收 SA，然后发送 A，同时等待一段时间一遍 A 到达服务端，
+# 然后才去发送 P，防止 P 比 A 先到达服务端。因为我们的代码目前还没有处理这样的情况
 time.sleep(5)
+
 data = "c"
 # data = "GET / HTTP/1.0\r\nHost: %s\r\n\r\n" % ip
+client.send(data)
+client.send(data)
 
-client.send(data)
-client.send(data)
-# 看看能不能收到 ACK
+# 等待接收 A
 time.sleep(5)
 
+# 等待接收服务器发来的 P
+time.sleep(5)
 data = client.recv(50)
 print data
+# 这里要暂停，为发送 ACK 获取时间
+time.sleep(10)
 # time.sleep(10)
 
 # client.close()

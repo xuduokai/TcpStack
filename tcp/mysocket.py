@@ -26,6 +26,8 @@ class MySocket:
     # 待处理的连接
     wait = []
 
+    isServer = False
+
     def __init__(self, src):
         self.src = src
         self.states = []
@@ -160,6 +162,7 @@ class MySocket:
 
         # 不是发给我的包
         if ip != self.src and port != self.sport:
+            print "..."
             return
 
         # 已经建立连接，服务器不处理
@@ -298,3 +301,6 @@ class MySocket:
 
     def bindIP(self, ip):
         self.src = ip
+
+    def isServer(self, isServer):
+        self.isServer = isServer

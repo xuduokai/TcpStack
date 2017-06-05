@@ -28,14 +28,26 @@ server.bind(sport=port)
 server.bindIP(ip)
 server.seq = 100
 server.listen()
-time.sleep(30)
+# 等待客户端发送的 S
+# 等待客户端发送的 A
+# 等待客户端发送的 P
+# 等待客户端发送的 P
+
+time.sleep(20)
 # socket = server.accept()
 # time.sleep(8)
 
 data = server.recv(50)
 print data
 # print socket.recv_buffer
-# server.send("s")
-# time.sleep(2)
+# 服务端发送 P
+server.send("a")
+server.send("b")
+server.send("c")
+server.send("d")
+server.send("e")
+
+# 等待接收 A
+time.sleep(10)
 # server.close()
 # print server.states
