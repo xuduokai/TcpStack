@@ -233,6 +233,14 @@ class MySocket:
             elif self.state == "ESTABLISHED":
                 self.state_change("CLOSE_WAIT")
                 self.send_default("A")
+            elif self.state == "FIN_WAIT_1":
+                if "A" in recv_flags:
+                    self.state_change("TIME_WAIT")
+                    self.send_default("A")
+                else:
+                    # 同时关闭
+                    self.state_change("CLOSING")
+                    self.send_default("A")
 
         elif "A" in recv_flags:
             # 第三次握手
@@ -251,6 +259,8 @@ class MySocket:
                 self.state_change("FIN_WAIT_2")
             elif self.state == "LAST_ACK":
                 self.state_change("CLOSE")
+            elif self.state == "CLOSING":
+                self.state_change("TIME_WAIT")
 
     def reset_state(self):
         """这里我是用条件变量的方式去创建一个新的 socket，会不会有性能问题？
