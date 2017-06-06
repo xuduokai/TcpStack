@@ -95,10 +95,12 @@ class MySocket:
     def close(self):
         # self.dst = ""
         # self.dport = 0
+        # 被动关闭
         if self.state == "CLOSE_WAIT":
             self.send_default("F")
             self.state_change("LAST_ACK")
         else:
+            # 主动关闭
             self.state_change("FIN_WAIT_1")
             # self.seq += 1
             self.send_default("F")
@@ -247,7 +249,6 @@ class MySocket:
                     self.con.release()
             elif self.state == "FIN_WAIT_1":
                 self.state_change("FIN_WAIT_2")
-
             elif self.state == "LAST_ACK":
                 self.state_change("CLOSE")
 

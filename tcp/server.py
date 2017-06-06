@@ -49,5 +49,13 @@ server.send("e")
 
 # 等待接收 A
 time.sleep(10)
-# server.close()
-# print server.states
+
+# 等待接受客户端发送的 FIN
+time.sleep(3)
+
+server.close()
+
+# 等待接受客户端发送对服务端 FIN 的 ACK
+time.sleep(10)
+
+print server.states
