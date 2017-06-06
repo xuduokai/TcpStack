@@ -236,6 +236,7 @@ class MySocket:
             # 第三次握手
             if self.state == "SYN_RCVD":
                 self.state_change("ESTABLISHED")
+                self.seq += 1
                 print "ESTABLISHED"
                 # 唤醒 accept
                 # 返回一个新的 socket
@@ -282,6 +283,13 @@ class MySocket:
         # really not right.
         tcp_flags = packet.sprintf("%TCP.flags%")
         if MySocket._has_load(packet):
+            """
+            问题：为什么是发过来的 seq 加而不是本地的 ack 加？
+            答：因为有可能是乱序的，同时，我这里没加乱序处理，应该是：
+            如果收到的包 seq 大于本地 ack，放在缓冲队列里，等待之前的包，同时做一些处理
+            等于：执行我们现在的方法，self.seq + len(packet.load)，只不过 packet 变为 self
+            小于：丢弃，重复的包
+            """
             return packet.seq + len(packet.load)
         elif 'S' in tcp_flags or 'F' in tcp_flags:
             return packet.seq + 1
