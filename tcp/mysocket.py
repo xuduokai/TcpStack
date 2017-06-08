@@ -28,6 +28,8 @@ class MySocket:
 
     isServer = False
 
+    TCPT_2MSL = 0
+
     def __init__(self, src):
         self.src = src
         self.states = []
@@ -42,6 +44,11 @@ class MySocket:
         self.seq = self._generate_seq()
         # ack是我们下一个想要接收的报文
         self.ack = 0
+
+        # 设置定时器
+        self.timer = [0, 0, 0, 0]
+        self.time_state = [False, False, False, False]
+        self.lock = threading.Lock()
 
     def connect(self, dst, dport):
         # 1、建立连接
@@ -141,6 +148,36 @@ class MySocket:
 
         t.daemon = True
         t.start()
+
+        # 500毫秒定时器
+        timer500 = threading.Thread(target=self.timer500_dispatch)
+        timer500.daemon = True
+        timer500.start()
+
+        # 200毫秒定时器
+        timer200 = threading.Thread(target=self.timer200_dispatch)
+        timer200.daemon = True
+        timer200.start()
+
+    def timer500_dispatch(self):
+        while True:
+            if self.time_state[self.TCPT_2MSL]:
+                print "entry"
+                # 2MSL
+                self.lock.acquire()
+                if self.timer[self.TCPT_2MSL] > 0:
+                    self.timer[self.TCPT_2MSL] -= 500
+                elif self.timer[self.TCPT_2MSL] <= 0:
+                    self.state_change("CLOSE")
+                    self.timer[self.TCPT_2MSL] = 0
+                    self.time_state[self.TCPT_2MSL] = False
+                self.lock.release()
+
+            time.sleep(0.5)
+
+    def timer200_dispatch(self):
+        while True:
+            time.sleep(0.2)
 
     def getPacket(self):
         # 抓包肯定只抓目的IP地址 是我们当前 sockets 的 ip
@@ -317,9 +354,19 @@ class MySocket:
     def state_change(self, new):
         self.state = new
         self.states.append(new)
+        if new == "TIME_WAIT":
+            # 给定时器设置一个值
+            self.set_timers(self.TCPT_2MSL, 2 * 1000)
 
     def bindIP(self, ip):
         self.src = ip
 
     def isServer(self, isServer):
         self.isServer = isServer
+
+    def set_timers(self, state, times):
+        """设置各种各样的定时器"""
+        self.lock.acquire()
+        self.timer[state] = times
+        self.time_state[state] = True
+        self.lock.release()

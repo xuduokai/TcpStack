@@ -48,16 +48,17 @@ client.send(data)
 time.sleep(5)
 
 # 等待接收服务器发来的 P
-time.sleep(5)
-data = client.recv(50)
-print data
+# time.sleep(5)
+# data = client.recv(50)
+# print data
 
 # 这里要暂停，为响应服务端发送的 P 而发送 ACK 挣取时间
-time.sleep(10)
+# time.sleep(10)
 
 client.close()
 
 # 等待接受服务端的 ACK 和 FIN
-time.sleep(15)
+time.sleep(10)
 
+time.sleep(5)
 print client.states

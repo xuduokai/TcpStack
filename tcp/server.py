@@ -41,14 +41,14 @@ data = server.recv(50)
 print data
 # print socket.recv_buffer
 # 服务端发送 P
-server.send("a")
-server.send("b")
-server.send("c")
-server.send("d")
-server.send("e")
+# server.send("a")
+# server.send("b")
+# server.send("c")
+# server.send("d")
+# server.send("e")
 
 # 等待接收 A
-time.sleep(10)
+# time.sleep(10)
 
 # 等待接受客户端发送的 FIN
 time.sleep(3)
