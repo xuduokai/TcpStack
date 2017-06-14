@@ -29,6 +29,7 @@ class MySocket:
     isServer = False
 
     TCPT_2MSL = 0
+    TCPT_KEEP = 1
 
     def __init__(self, src):
         self.src = src
@@ -63,8 +64,8 @@ class MySocket:
 
         self.ip_header = IP(dst=self.dst, src=self.src)
         # 开始三次握手，发送建立连接的请求
-        SYN = IP(src=self.src, dst=self.dst) / TCP(sport=self.sport, dport=self.dport, flags="S", seq=self.seq)
-        self.send_packet(SYN)
+        self.send_default("S")
+        self.start_timers(self.TCPT_KEEP, 10 * 1000)
         # 2、开始抓包
         self.start_daemon()
 
@@ -162,20 +163,34 @@ class MySocket:
     def timer500_dispatch(self):
         while True:
             if self.time_state[self.TCPT_2MSL]:
-                print "entry"
                 # 2MSL
                 self.lock.acquire()
                 if self.timer[self.TCPT_2MSL] > 0:
                     self.timer[self.TCPT_2MSL] -= 500
                 elif self.timer[self.TCPT_2MSL] <= 0:
                     self.state_change("CLOSE")
-                    self.timer[self.TCPT_2MSL] = 0
-                    self.time_state[self.TCPT_2MSL] = False
+                    self.close_timers(self.TCPT_2MSL)
+                self.lock.release()
+
+            if self.time_state[self.TCPT_KEEP]:
+                # SYN
+                self.lock.acquire()
+                if self.timer[self.TCPT_KEEP] > 0:
+                    print self.timer[self.TCPT_KEEP]
+
+                    self.timer[self.TCPT_KEEP] -= 500
+                    print self.timer[self.TCPT_KEEP]
+                elif self.timer[self.TCPT_KEEP] <= 0:
+                    # 这里是真正做事的地方
+                    self.tcp_drop()
+                    self.state_change("CLOSE")
+                    self.close_timers(self.TCPT_KEEP)
                 self.lock.release()
 
             time.sleep(0.5)
 
     def timer200_dispatch(self):
+        """只用于延迟 ack"""
         while True:
             time.sleep(0.2)
 
@@ -256,6 +271,8 @@ class MySocket:
                 print "ESTABLISHED"
                 self.seq += 1
                 self.send_default("A")
+                # 关闭 SYN 的定时器
+                self.close_timers(self.TCPT_KEEP)
 
                 # time.sleep(1)
                 # self.send_default("P")
@@ -356,7 +373,7 @@ class MySocket:
         self.states.append(new)
         if new == "TIME_WAIT":
             # 给定时器设置一个值
-            self.set_timers(self.TCPT_2MSL, 2 * 1000)
+            self.start_timers(self.TCPT_2MSL, 2 * 1000)
 
     def bindIP(self, ip):
         self.src = ip
@@ -364,9 +381,20 @@ class MySocket:
     def isServer(self, isServer):
         self.isServer = isServer
 
-    def set_timers(self, state, times):
+    def start_timers(self, state, times):
         """设置各种各样的定时器"""
         self.lock.acquire()
         self.timer[state] = times
         self.time_state[state] = True
         self.lock.release()
+
+    def close_timers(self, state):
+        self.timer[state] = 0
+        self.time_state[state] = False
+
+    """
+    通用函数
+    """
+
+    def tcp_drop(self):
+        self.send_default("R")
