@@ -1,6 +1,7 @@
 # coding=utf-8
 import random
 import threading
+import Queue
 
 import time
 from scapy.layers.inet import TCP, IP, Padding
@@ -30,6 +31,7 @@ class MySocket:
 
     TCPT_2MSL = 0
     TCPT_KEEP = 1
+    TCPT_RESENT = 2
 
     def __init__(self, src):
         self.src = src
@@ -51,6 +53,10 @@ class MySocket:
         self.time_state = [False, False, False, False]
         self.lock = threading.Lock()
 
+        # 保存发过的包但是有大小限制，比如只有10个包，超过就把最早的移除
+        self.send_buffer = Queue.Queue(10)
+        self.expect_ack = -1
+
     def connect(self, dst, dport):
         # 1、建立连接
         self.state_change("SYN_SENT")
@@ -65,7 +71,7 @@ class MySocket:
         self.ip_header = IP(dst=self.dst, src=self.src)
         # 开始三次握手，发送建立连接的请求
         self.send_default("S")
-        self.start_timers(self.TCPT_KEEP, 10 * 1000)
+        self.start_timers(self.TCPT_KEEP, 75 * 1000)
         # 2、开始抓包
         self.start_daemon()
 
@@ -176,15 +182,32 @@ class MySocket:
                 # SYN
                 self.lock.acquire()
                 if self.timer[self.TCPT_KEEP] > 0:
-                    print self.timer[self.TCPT_KEEP]
 
                     self.timer[self.TCPT_KEEP] -= 500
-                    print self.timer[self.TCPT_KEEP]
                 elif self.timer[self.TCPT_KEEP] <= 0:
                     # 这里是真正做事的地方
                     self.tcp_drop()
                     self.state_change("CLOSE")
                     self.close_timers(self.TCPT_KEEP)
+                self.lock.release()
+
+            if self.time_state[self.TCPT_RESENT]:
+                # SYN
+                self.lock.acquire()
+                if self.timer[self.TCPT_RESENT] > 0:
+                    print self.timer[self.TCPT_RESENT]
+                    self.timer[self.TCPT_RESENT] -= 500
+                    print self.timer[self.TCPT_RESENT]
+                elif self.timer[self.TCPT_RESENT] <= 0:
+                    # 重发之前的包
+                    packet = self.send_buffer.get()
+                    self.send_packet(packet)
+
+                    # 不释放会造成线程阻塞
+                    self.lock.release()
+                    print "resent"
+                    self.start_resent(packet, self.expect_ack)
+                    self.lock.acquire()
                 self.lock.release()
 
             time.sleep(0.5)
@@ -297,6 +320,9 @@ class MySocket:
                     self.send_default("A")
 
         elif "A" in recv_flags:
+            if packet.ack == self.expect_ack:
+                self.close_resent()
+
             # 第三次握手
             if self.state == "SYN_RCVD":
                 self.state_change("ESTABLISHED")
@@ -337,6 +363,10 @@ class MySocket:
         # todo：现在是发了 seq 就增加，那么万一对面只收到一部分怎么办，应该是收到 ack 后把 seq 增加吧，后面再看
         if load is not None:
             self.seq += len(load)
+
+        # 是 S、F、P
+        if "A" not in flags:
+            self.start_resent(full_packet, self.seq)
 
     @staticmethod
     def _generate_seq():
@@ -391,6 +421,16 @@ class MySocket:
     def close_timers(self, state):
         self.timer[state] = 0
         self.time_state[state] = False
+
+    def start_resent(self, packet, expect_ack):
+        self.start_timers(self.TCPT_RESENT, 2 * 1000)
+        self.send_buffer.put(packet)
+        self.expect_ack = expect_ack
+
+    def close_resent(self):
+        self.close_timers(self.TCPT_RESENT)
+        self.send_buffer.get()
+        self.expect_ack = 0
 
     """
     通用函数
